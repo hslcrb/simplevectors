@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QToolBar, QFileDialog,
                                QComboBox, QHBoxLayout, QGroupBox, QGraphicsItem)
 from PySide6.QtSvgWidgets import QGraphicsSvgItem
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPalette, QWheelEvent, QColor, QPen
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPalette, QWheelEvent, QColor, QPen, QTransform
 from PySide6.QtCore import Qt, QByteArray, QSize
 from ..assets.i18n import i18n
 from ..core.file_io import FileIO
@@ -126,6 +126,7 @@ class MainWindow(QMainWindow):
 
         # Graphics View (The Canvas)
         self.view = GraphicsView()
+        self.scene.selectionChanged.connect(self.on_scene_selection_changed) 
         self.view.setScene(self.scene)
         self.splitter.addWidget(self.view)
 
@@ -269,20 +270,77 @@ class MainWindow(QMainWindow):
     def load_svg_to_scene(self, svg_content):
         self.scene.clear()
         
-        # Keep reference to renderer to prevent garbage collection causing segfaults
+        # Keep reference to renderer
         self.renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
         
-        # Render the ENTIRE SVG as a single item to ensure correct composition and transforms.
-        # Splitting into individual items caused broken layouts because explicit transforms usually 
-        # rely on parent group context which is lost when rendered individually.
+        # 1. Background (The actual render)
+        # Locked so it cannot be selected directly, we use overlay for that.
         svg_item = QGraphicsSvgItem()
         svg_item.setSharedRenderer(self.renderer)
+        svg_item.setFlags(QGraphicsItem.ItemClipsToShape) # Disable default selection
         self.scene.addItem(svg_item)
         self.scene.setSceneRect(svg_item.boundingRect())
-        
-        # We prefer to work with one main item for display accuracy.
-        # For selection highlight, we will add an overlay item later.
         self.main_svg_item = svg_item
+        
+        if self.svg_manager.root is None:
+            return
+
+        # 2. Transparent Interactive Overlays
+        # Iterate over all elements to create hitboxes
+        for elem in self.svg_manager.root.iter():
+            tag = etree.QName(elem).localname
+            if tag in ['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'image']:
+                if 'id' in elem.attrib:
+                    eid = elem.attrib['id']
+                    if self.renderer.elementExists(eid):
+                         # Get bounds in local coordinates
+                         bounds = self.renderer.boundsOnElement(eid)
+                         
+                         # Get matrix (transforms from parents)
+                         matrix = self.renderer.matrixForElement(eid)
+                         
+                         # Create an invisible interactive item matching the bounds & transform
+                         hitbox = QGraphicsRectItem(bounds)
+                         
+                         # Apply transform
+                         hitbox.setTransform(QTransform(matrix))
+                         
+                         # Branding & Flags
+                         hitbox.setBrush(QColor(0, 0, 0, 1)) # Almost transparent but hit-testable. 0 alpha sometimes ignored? 1 is safe.
+                         hitbox.setPen(Qt.NoPen)             # No border by default
+                         hitbox.setFlags(QGraphicsItem.ItemIsSelectable)
+                         hitbox.setData(0, "interactive")
+                         hitbox.setData(1, eid)
+                         
+                         self.scene.addItem(hitbox)
+
+    def on_scene_selection_changed(self):
+        """Sync scene selection to list widget."""
+        selected_items = self.scene.selectedItems()
+        # If nothing selected, just clear list
+        if not selected_items:
+            self.element_list.blockSignals(True)
+            self.element_list.clearSelection()
+            self.element_list.blockSignals(False)
+            return
+
+        # Temporarily block signals to avoid loop
+        self.element_list.blockSignals(True)
+        self.element_list.clearSelection()
+        
+        ids_to_select = []
+        for item in selected_items:
+             eid = item.data(1)
+             if eid:
+                 ids_to_select.append(eid)
+        
+        # Find in list
+        for i in range(self.element_list.count()):
+            item = self.element_list.item(i)
+            if item.text() in ids_to_select:
+                item.setSelected(True)
+        
+        self.element_list.blockSignals(False)
 
     def open_file(self):
         path, _ = QFileDialog.getOpenFileName(self, i18n.get('open'), "", "Vector Files (*.svg *.eps);;All Files (*)")
@@ -350,26 +408,24 @@ class MainWindow(QMainWindow):
 
     def get_selected_id(self):
         items = self.element_list.selectedItems()
+        
+        # Clear previous highlight visuals first
+        for item in self.scene.items():
+            if item.data(0) == "highlight":
+               self.scene.removeItem(item)
+
         if items:
             eid = items[0].text()
-            # Highlight selection
-            # Remove previous highlights
-            for item in self.scene.items():
-                if isinstance(item, QGraphicsRectItem) and item.data(0) == "highlight":
-                    self.scene.removeItem(item)
             
-            # Find bounds
+            # Find bounds & transform for highlight
             if self.renderer.elementExists(eid):
-                # Getting bounds is tricky in PySide6 QtSvg as boundsOnElement might be local.
-                # However, usually for simple transforms it works.
-                # Let's clean transform matrix issues by getting global bounds if possible? 
-                # QSvgRenderer.boundsOnElement returns QRectF.
                 rect = self.renderer.boundsOnElement(eid)
+                matrix = self.renderer.matrixForElement(eid)
                 
-                # Check matrix. Since we render the whole item at 0,0, these bounds should be correct relative to scene.
-                # Create highlight rect
                 highlight = QGraphicsRectItem(rect)
-                highlight.setData(0, "highlight") # Tag data
+                highlight.setTransform(QTransform(matrix))
+                highlight.setData(0, "highlight") 
+                
                 pen = QPen(QColor("#00FFbf"), 2, Qt.DashLine)
                 pen.setCosmetic(True)
                 highlight.setPen(pen)
