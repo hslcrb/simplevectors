@@ -135,7 +135,7 @@ class MainWindow(QMainWindow):
         
         # Element List
         self.element_list = QListWidget()
-        self.element_list.clicked.connect(self.on_element_selected)
+        self.element_list.itemSelectionChanged.connect(self.on_element_selected)
         self.sidebar_layout.addWidget(QLabel(i18n.get('view'))) # Placeholder title
         self.sidebar_layout.addWidget(self.element_list)
         
@@ -345,7 +345,8 @@ class MainWindow(QMainWindow):
             self.element_list.addItem(elem.attrib['id'])
 
     def on_element_selected(self):
-        pass
+        """Handle element selection in the list widget."""
+        self.get_selected_id()
 
     def get_selected_id(self):
         items = self.element_list.selectedItems()
