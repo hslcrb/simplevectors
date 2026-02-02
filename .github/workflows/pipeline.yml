@@ -61,7 +61,7 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs: version.outputs.version }}
+          tag_name: "${{ needs.version.outputs.version }}"
           files: dist/${{ matrix.artifact_name }}*
           draft: false
           prerelease: false
@@ -88,4 +88,4 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ needs: version.outputs.version }}
+            ghcr.io/${{ github.repository }}:${{ needs.version.outputs.version }}
