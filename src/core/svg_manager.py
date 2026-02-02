@@ -15,9 +15,24 @@ class SvgManager:
                 content = content.encode('utf-8')
             self.tree = etree.fromstring(content, parser=parser).getroottree()
             self.root = self.tree.getroot()
+            self._ensure_ids()
         except Exception as e:
             print(f"Error parsing SVG: {e}")
             raise
+
+    def _ensure_ids(self):
+        """Ensures all visual elements have an ID."""
+        if self.root is None:
+            return
+        
+        count = 1
+        # Iterate over common visual elements
+        for elem in self.root.iter():
+            tag = etree.QName(elem).localname
+            if tag in ['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'g']:
+                if 'id' not in elem.attrib:
+                    elem.attrib['id'] = f"gen_{tag}_{count}"
+                    count += 1
 
     def get_string(self):
         """Returns the current SVG as a string."""

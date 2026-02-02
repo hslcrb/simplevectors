@@ -2,10 +2,11 @@ import sys
 import os
 from PySide6.QtWidgets import (QApplication, QMainWindow, QToolBar, QFileDialog, 
                                QMessageBox, QListWidget, QDockWidget, QVBoxLayout, 
-                               QWidget, QPushButton, QColorDialog, QLabel, QSplitter)
+                               QWidget, QPushButton, QColorDialog, QLabel, QSplitter,
+                               QScrollArea)
 from PySide6.QtSvgWidgets import QSvgWidget
-from PySide6.QtGui import QAction, QIcon, QKeySequence
-from PySide6.QtCore import Qt, QByteArray
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter
+from PySide6.QtCore import Qt, QByteArray, QSize
 from ..assets.i18n import i18n
 from ..core.file_io import FileIO
 from ..core.svg_manager import SvgManager
@@ -31,9 +32,18 @@ class MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Horizontal)
         self.layout.addWidget(self.splitter)
 
+        # Scroll Area for SVG Viewer
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setBackgroundRole(QPainter.Dark)
+        # We want the widget to expand if smaller, but scroll if larger.
+        # QSvgWidget doesn't automatically resize to content unless we tell it.
+        self.scroll_area.setWidgetResizable(True) 
+        
         self.svg_widget = QSvgWidget()
         self.svg_widget.setStyleSheet("background-color: white;")
-        self.splitter.addWidget(self.svg_widget)
+        
+        self.scroll_area.setWidget(self.svg_widget)
+        self.splitter.addWidget(self.scroll_area)
 
         # Sidebar for layer/element list (Primitive representation)
         self.sidebar = QWidget()
@@ -193,6 +203,20 @@ class MainWindow(QMainWindow):
         # QSvgWidget reads from file or bytes.
         svg_bytes = self.svg_manager.get_string().encode('utf-8')
         self.svg_widget.load(QByteArray(svg_bytes))
+        
+        # Adjust size to fit available area or content size
+        # Note: If we use setWidgetResizable(True) on scrollarea, it tries to fit the widget to the viewport.
+        # But for large SVGs we want the widget to be its natural size so we can scroll.
+        # So we should probably setWidgetResizable(False) if we want scrolling for large images.
+        
+        sz = self.svg_widget.renderer().defaultSize()
+        if sz.isValid():
+             # If the SVG is larger than the viewport, we want to set the widget size to the SVG size
+             # so scrollbars appear.
+             self.svg_widget.setFixedSize(sz)
+             self.scroll_area.setWidgetResizable(False) # Allow distinct size
+        else:
+             self.scroll_area.setWidgetResizable(True) # Fit to window if no size info
 
     def populate_element_list(self):
         self.element_list.clear()
