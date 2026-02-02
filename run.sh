@@ -29,9 +29,9 @@ else
     source "$VENV_DIR/bin/activate"
 fi
 
-# PYTHONPATH 설정 (src 디렉토리 인식)
-export PYTHONPATH="$PROJECT_DIR/src:$PYTHONPATH"
+# PYTHONPATH 설정: 프로젝트 루트를 경로에 추가하여 'src' 패키지를 인식하게 함
+export PYTHONPATH="$PROJECT_DIR:$PYTHONPATH"
 
-# 실행
+# 실행: 모듈 모드로 실행하여 상대 경로 import 문제 해결
 echo "🚀 SimpleVectors 실행 중... (Launching SimpleVectors...)"
-python3 "$PROJECT_DIR/src/main.py"
+python3 -m src.main

@@ -1,5 +1,5 @@
 import sys
-from ui.main_window import MainWindow, QApplication
+from .ui.main_window import MainWindow, QApplication
 
 def main():
     app = QApplication(sys.argv)
