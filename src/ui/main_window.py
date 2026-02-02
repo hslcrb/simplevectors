@@ -236,12 +236,11 @@ class MainWindow(QMainWindow):
     def load_svg_to_scene(self, svg_content):
         self.scene.clear()
         
-        # Save temp file for QGraphicsSvgItem (it prefers file)
-        # Or use renderer.
-        # Ideally we pass byte array.
-        renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
+        # Keep reference to renderer to prevent garbage collection causing segfaults
+        self.renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
+        
         svg_item = QGraphicsSvgItem()
-        svg_item.setSharedRenderer(renderer)
+        svg_item.setSharedRenderer(self.renderer)
         self.scene.addItem(svg_item)
         self.scene.setSceneRect(svg_item.boundingRect())
 
@@ -300,7 +299,7 @@ class MainWindow(QMainWindow):
 
     def populate_element_list(self):
         self.element_list.clear()
-        if not self.svg_manager.root:
+        if self.svg_manager.root is None:
             return
         for elem in self.svg_manager.root.xpath("//*[@id]"):
             self.element_list.addItem(elem.attrib['id'])
