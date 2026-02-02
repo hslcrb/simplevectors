@@ -565,25 +565,40 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, i18n.get('about'), i18n.get('about_text'))
 
     def on_context_menu(self, pos):
-        item = self.view.itemAt(pos)
-        
+        # Always show all options, but disable/enable based on context
         menu = QMenu(self)
+        
+        # 1. Edit History
         menu.addAction(self.act_undo)
         menu.addAction(self.act_redo)
         menu.addSeparator()
         
-        if item: # If something under mouse (even interactive overlay)
-            # Check selection from list
-            selected_id = self.get_selected_id()
-             
-            if selected_id:
-                menu.addAction(self.act_color)
-                menu.addSeparator()
-                menu.addAction(self.act_group)
-                menu.addAction(self.act_ungroup)
-                menu.addSeparator()
-                menu.addAction(self.act_delete)
-                menu.addAction(self.act_export_selected)
+        # Check if anything is selected
+        selected_id = self.get_selected_id()
+        has_selection = selected_id is not None
+        
+        # 2. Manipulation Options
+        # Color
+        self.act_color.setEnabled(has_selection)
+        menu.addAction(self.act_color)
+        
+        menu.addSeparator()
+        
+        # Group/Ungroup
+        self.act_group.setEnabled(has_selection)
+        menu.addAction(self.act_group)
+        
+        self.act_ungroup.setEnabled(has_selection)
+        menu.addAction(self.act_ungroup)
+        
+        menu.addSeparator()
+        
+        # Delete/Export
+        self.act_delete.setEnabled(has_selection)
+        menu.addAction(self.act_delete)
+        
+        self.act_export_selected.setEnabled(has_selection)
+        menu.addAction(self.act_export_selected)
         
         menu.exec(self.view.mapToGlobal(pos))
 
