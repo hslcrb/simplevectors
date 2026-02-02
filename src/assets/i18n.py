@@ -69,10 +69,20 @@ class I18n:
         self.set_system_default()
 
     def set_system_default(self):
-        sys_lang = locale.getdefaultlocale()[0]
-        if sys_lang and sys_lang.startswith("ko"):
-            self.current_lang = "ko"
-        else:
+        try:
+            sys_lang = locale.getdefaultlocale()[0]
+            if not sys_lang:
+                import os
+                sys_lang = os.environ.get('LANG', 'en')
+            
+            print(f"Detected System Language: {sys_lang}")
+            
+            if sys_lang and sys_lang.startswith("ko"):
+                self.current_lang = "ko"
+            else:
+                self.current_lang = "en"
+        except Exception as e:
+            print(f"Locale detection error: {e}")
             self.current_lang = "en"
 
     def set_language(self, lang):

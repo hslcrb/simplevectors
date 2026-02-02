@@ -106,6 +106,8 @@ class MainWindow(QMainWindow):
         self.toolbar.addAction(self.act_save)
         self.toolbar.addAction(self.act_color)
         self.toolbar.addAction(self.act_group)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.act_toggle_lang)
 
     def update_ui_text(self):
         """Updates text elements based on current language."""
