@@ -1,6 +1,8 @@
-# SimpleVectors
+# SimpleVectors v0.0.0
 
 A powerful and modular vector graphics editor capable of opening, saving, converting, and modifying vector files (SVG, EPS).
+
+[![CI/CD Pipeline](https://github.com/hslcrb/simplevectors/actions/workflows/pipeline.yml/badge.svg)](https://github.com/hslcrb/simplevectors/actions/workflows/pipeline.yml)
 
 ## Features
 - **Open & Save**: Full support for SVG and EPS formats.
@@ -17,6 +19,14 @@ A powerful and modular vector graphics editor capable of opening, saving, conver
 - **Conversion**: Export vectors to SVG, PDF, EPS, or individual elements.
 - **Internationalization**: Full bilingual support (English & Korean) with automatic system detection.
 
+## CI/CD & Releases
+- **Standalone Binaries**: Executables for Linux, Windows, and macOS are automatically built and released on every push. [Download latest releases](https://github.com/hslcrb/simplevectors/releases).
+- **Docker Container**: A Dockerized version is available at GitHub Container Registry.
+  ```bash
+  docker pull ghcr.io/hslcrb/simplevectors:latest
+  ```
+- **Automated Versioning**: Versions follow `v0.0.x` format, incrementing every 10 commits.
+
 ## How to Run
 Simply execute the run script in the terminal:
 ```bash
@@ -31,9 +41,11 @@ Apache 2.0 License
 
 ---
 
-# SimpleVectors (심플벡터)
+# SimpleVectors (심플벡터) v0.0.0
 
 SVG, EPS 등 벡터 파일을 열고, 저장하고, 변환하며 정밀하게 편집할 수 있는 강력한 모듈형 벡터 그래픽 편집기입니다.
+
+[![CI/CD Pipeline](https://github.com/hslcrb/simplevectors/actions/workflows/pipeline.yml/badge.svg)](https://github.com/hslcrb/simplevectors/actions/workflows/pipeline.yml)
 
 ## 기능 (Features)
 - **열기 및 저장**: SVG 및 EPS 형식을 완벽하게 지원합니다.
@@ -49,6 +61,14 @@ SVG, EPS 등 벡터 파일을 열고, 저장하고, 변환하며 정밀하게 �
   - **컨텍스트 메뉴**: 마우스 우클릭으로 모든 편집 도구에 빠르게 접근할 수 있습니다.
 - **변환 및 내보내기**: SVG, PDF, EPS 변환 및 개별 요소 내보내기를 지원합니다.
 - **국제화**: 영어 및 한국어를 완벽하게 지원하며, 시스템 언어를 자동으로 감지합니다.
+
+## CI/CD 및 배포 (Releases)
+- **단일 실행 파일**: Linux, Windows, macOS용 실행 파일이 푸시할 때마다 자동으로 빌드되어 릴리스됩니다. [최신 릴리스 다운로드](https://github.com/hslcrb/simplevectors/releases).
+- **도커 컨테이너**: GHCR에서 도커 이미지를 제공합니다.
+  ```bash
+  docker pull ghcr.io/hslcrb/simplevectors:latest
+  ```
+- **자동 버전 관리**: `v0.0.x` 형식을 따르며, 커밋 10번마다 버전이 자동으로 올라갑니다.
 
 ## 실행 방법
 터미널에서 다음 스크립트를 실행하십시오:
