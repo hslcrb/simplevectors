@@ -64,6 +64,10 @@ class GraphicsView(QGraphicsView):
             super().wheelEvent(event)
             
     def mousePressEvent(self, event):
+        # Prevent Right Click from clearing selection
+        if event.button() == Qt.RightButton:
+            return
+
         # Allow panning with Middle Mouse or Alt+Click if RubberBand is default
         if event.button() == Qt.MiddleButton:
             self.setDragMode(QGraphicsView.ScrollHandDrag)
