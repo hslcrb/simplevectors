@@ -30,6 +30,10 @@ TRANSLATIONS = {
         "about_text": "SimpleVectors\nRheehose (Rhee Creative) 2008-2026\nLicense: Apache 2.0",
         "confirm_exit": "Are you sure you want to exit?",
         "warning": "Warning",
+        "image_trace": "이미지 추적",
+        "trace": "추적",
+        "preset": "사전 설정",
+        "select_image": "이미지 선택",
     },
     "ko": {
         "app_title": "SimpleVectors",
@@ -60,6 +64,10 @@ TRANSLATIONS = {
         "about_text": "SimpleVectors\nRheehose (Rhee Creative) 2008-2026\n라이선스: Apache 2.0",
         "confirm_exit": "종료하시겠습니까?",
         "warning": "경고",
+        "image_trace": "이미지 추적",
+        "trace": "추적",
+        "preset": "사전 설정",
+        "select_image": "이미지 선택",
     }
 }
 

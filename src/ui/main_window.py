@@ -3,72 +3,150 @@ import os
 from PySide6.QtWidgets import (QApplication, QMainWindow, QToolBar, QFileDialog, 
                                QMessageBox, QListWidget, QDockWidget, QVBoxLayout, 
                                QWidget, QPushButton, QColorDialog, QLabel, QSplitter,
-                               QScrollArea)
-from PySide6.QtSvgWidgets import QSvgWidget
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter
+                               QGraphicsView, QGraphicsScene, QGraphicsRectItem,
+                               QComboBox, QHBoxLayout, QGroupBox)
+from PySide6.QtSvgWidgets import QGraphicsSvgItem
+from PySide6.QtSvg import QSvgRenderer
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPalette, QWheelEvent
 from PySide6.QtCore import Qt, QByteArray, QSize
 from ..assets.i18n import i18n
 from ..core.file_io import FileIO
 from ..core.svg_manager import SvgManager
+from ..core.image_tracer import ImageTracer
 import uuid
+
+class GraphicsView(QGraphicsView):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setRenderHint(QPainter.Antialiasing)
+        self.setRenderHint(QPainter.SmoothPixmapTransform)
+        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
+        self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        
+        # Optimize
+        self.setOptimizationFlags(QGraphicsView.DontAdjustForAntialiasing | QGraphicsView.IndirectPainting)
+
+    def wheelEvent(self, event: QWheelEvent):
+        # Zoom with Ctrl + Wheel or just Wheel if preferred.
+        # User asked for Ctrl ++ --, but usually wheel is for zoom too.
+        # Let's implement robust zoom.
+        if event.modifiers() & Qt.ControlModifier:
+            zoomInFactor = 1.25
+            zoomOutFactor = 1 / zoomInFactor
+
+            if event.angleDelta().y() > 0:
+                zoomFactor = zoomInFactor
+            else:
+                zoomFactor = zoomOutFactor
+            
+            self.scale(zoomFactor, zoomFactor)
+        else:
+            # Default scroll behavior
+            super().wheelEvent(event)
+
+    def keyPressEvent(self, event):
+        # WASD and Arrow Keys for panning
+        step = 20
+        hbar = self.horizontalScrollBar()
+        vbar = self.verticalScrollBar()
+        
+        if event.key() == Qt.Key_Left or event.key() == Qt.Key_A:
+            hbar.setValue(hbar.value() - step)
+        elif event.key() == Qt.Key_Right or event.key() == Qt.Key_D:
+            hbar.setValue(hbar.value() + step)
+        elif event.key() == Qt.Key_Up or event.key() == Qt.Key_W:
+            vbar.setValue(vbar.value() - step)
+        elif event.key() == Qt.Key_Down or event.key() == Qt.Key_S:
+            vbar.setValue(vbar.value() + step)
+        # Zoom Keys (Ctrl +, Ctrl -)
+        elif event.modifiers() & Qt.ControlModifier:
+            if event.key() == Qt.Key_Plus or event.key() == Qt.Key_Equal:
+                self.scale(1.25, 1.25)
+            elif event.key() == Qt.Key_Minus:
+                self.scale(0.8, 0.8)
+            else:
+                super().keyPressEvent(event)
+        else:
+            super().keyPressEvent(event)
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.svg_manager = SvgManager()
         self.current_file_path = None
+        self.scene = QGraphicsScene()
         self.init_ui()
 
     def init_ui(self):
         self.setWindowTitle(f"{i18n.get('app_title')} - Rheehose")
-        self.resize(1000, 700)
+        self.resize(1200, 800)
 
-        # Central Widget (SVG Viewer)
+        # Central Widget Layout
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
         self.layout = QVBoxLayout(self.central_widget)
         
-        # Splitter to hold view and maybe side panel
         self.splitter = QSplitter(Qt.Horizontal)
         self.layout.addWidget(self.splitter)
 
-        # Scroll Area for SVG Viewer
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setBackgroundRole(QPainter.Dark)
-        # We want the widget to expand if smaller, but scroll if larger.
-        # QSvgWidget doesn't automatically resize to content unless we tell it.
-        self.scroll_area.setWidgetResizable(True) 
-        
-        self.svg_widget = QSvgWidget()
-        self.svg_widget.setStyleSheet("background-color: white;")
-        
-        self.scroll_area.setWidget(self.svg_widget)
-        self.splitter.addWidget(self.scroll_area)
+        # Graphics View (The Canvas)
+        self.view = GraphicsView()
+        self.view.setScene(self.scene)
+        self.splitter.addWidget(self.view)
 
-        # Sidebar for layer/element list (Primitive representation)
+        # Sidebar (Elements + Trace)
         self.sidebar = QWidget()
         self.sidebar_layout = QVBoxLayout(self.sidebar)
+        
+        # Element List
         self.element_list = QListWidget()
         self.element_list.clicked.connect(self.on_element_selected)
-        self.sidebar_layout.addWidget(QLabel("Elements (IDs)"))
+        self.sidebar_layout.addWidget(QLabel(i18n.get('view'))) # Placeholder title
         self.sidebar_layout.addWidget(self.element_list)
-        self.splitter.addWidget(self.sidebar)
         
-        # Set splitter sizes
-        self.splitter.setSizes([800, 200])
+        # Image Trace Panel
+        self.trace_group = QGroupBox(i18n.get('image_trace'))
+        self.trace_layout = QVBoxLayout()
+        
+        self.btn_select_img = QPushButton(i18n.get('select_image'))
+        self.btn_select_img.clicked.connect(self.select_image_to_trace)
+        self.trace_layout.addWidget(self.btn_select_img)
+        
+        self.trace_layout.addWidget(QLabel(i18n.get('preset')))
+        self.combo_preset = QComboBox()
+        self.combo_preset.addItems(list(ImageTracer.PRESETS.keys()))
+        self.trace_layout.addWidget(self.combo_preset)
+        
+        self.btn_trace = QPushButton(i18n.get('trace'))
+        self.btn_trace.clicked.connect(self.perform_trace)
+        self.btn_trace.setEnabled(False) 
+        self.trace_layout.addWidget(self.btn_trace)
+        
+        self.trace_group.setLayout(self.trace_layout)
+        self.sidebar_layout.addWidget(self.trace_group)
+        
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.setSizes([900, 300])
 
         self.create_actions()
         self.create_menus()
         self.create_toolbar()
         self.update_ui_text()
+        
+        # Trace state
+        self.trace_img_path = None
 
     def create_actions(self):
         # File Actions
         self.act_open = QAction(i18n.get('open'), self)
         self.act_open.triggered.connect(self.open_file)
+        self.act_open.setShortcut(QKeySequence.Open)
         
         self.act_save = QAction(i18n.get('save'), self)
         self.act_save.triggered.connect(self.save_file)
+        self.act_save.setShortcut(QKeySequence.Save)
         
         self.act_convert = QAction(i18n.get('convert'), self)
         self.act_convert.triggered.connect(self.convert_file)
@@ -82,6 +160,15 @@ class MainWindow(QMainWindow):
         
         self.act_group = QAction(i18n.get('group'), self)
         self.act_group.triggered.connect(self.group_items)
+
+        # Zoom Actions
+        self.act_zoom_in = QAction("Zoom In", self)
+        self.act_zoom_in.setShortcut(QKeySequence.ZoomIn)
+        self.act_zoom_in.triggered.connect(lambda: self.view.scale(1.25, 1.25))
+        
+        self.act_zoom_out = QAction("Zoom Out", self)
+        self.act_zoom_out.setShortcut(QKeySequence.ZoomOut)
+        self.act_zoom_out.triggered.connect(lambda: self.view.scale(0.8, 0.8))
 
         # View/Lang Actions
         self.act_toggle_lang = QAction(i18n.get('toggle_language'), self)
@@ -104,6 +191,9 @@ class MainWindow(QMainWindow):
         self.menu_edit.addAction(self.act_group)
 
         self.menu_view = menubar.addMenu(i18n.get('view'))
+        self.menu_view.addAction(self.act_zoom_in)
+        self.menu_view.addAction(self.act_zoom_out)
+        self.menu_view.addSeparator()
         self.menu_view.addAction(self.act_toggle_lang)
         
         self.menu_help = menubar.addMenu("Help")
@@ -134,26 +224,39 @@ class MainWindow(QMainWindow):
         self.act_group.setText(i18n.get('group'))
         self.act_toggle_lang.setText(i18n.get('toggle_language'))
         self.act_about.setText(i18n.get('about'))
+        
+        self.trace_group.setTitle(i18n.get('image_trace'))
+        self.btn_select_img.setText(i18n.get('select_image'))
+        self.btn_trace.setText(i18n.get('trace'))
 
     def toggle_language(self):
         i18n.toggle_language()
         self.update_ui_text()
 
+    def load_svg_to_scene(self, svg_content):
+        self.scene.clear()
+        
+        # Save temp file for QGraphicsSvgItem (it prefers file)
+        # Or use renderer.
+        # Ideally we pass byte array.
+        renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
+        svg_item = QGraphicsSvgItem()
+        svg_item.setSharedRenderer(renderer)
+        self.scene.addItem(svg_item)
+        self.scene.setSceneRect(svg_item.boundingRect())
+
     def open_file(self):
         path, _ = QFileDialog.getOpenFileName(self, i18n.get('open'), "", "Vector Files (*.svg *.eps);;All Files (*)")
         if path:
             try:
-                # Basic handling: if SVG, load directly. If EPS, convert first?
-                # For this prototype, we focus on SVG primarily as the internal format.
                 if path.lower().endswith('.eps'):
-                    # TODO: Implement EPS to SVG conversion or intermediate load
-                    QMessageBox.warning(self, i18n.get('warning'), "EPS loading is experimental. Please rely on SVG.")
+                    QMessageBox.warning(self, i18n.get('warning'), "EPS loading is experimental.")
                     return
 
                 content = FileIO.open_svg(path)
                 self.svg_manager.load_content(content)
                 self.current_file_path = path
-                self.refresh_view()
+                self.load_svg_to_scene(self.svg_manager.get_string())
                 self.populate_element_list()
                 self.statusBar().showMessage(i18n.get('file_opened').format(path))
             except Exception as e:
@@ -187,49 +290,22 @@ class MainWindow(QMainWindow):
         if path:
             ext = path.split('.')[-1]
             try:
-                # Save current state to temp if needed, or just use current file
-                # If we have modified the SVG in memory, we should save it first or convert the in-memory string.
-                # svglib works on files. Note: For a robust app, we'd pipe the string.
-                # Here, we save to a temporary location or just overwrite current if saved.
                 if self.current_file_path:
-                    # Save current state to ensure conversions reflects edits
+                    # Save first
                     FileIO.save_svg(self.current_file_path, self.svg_manager.get_string())
                     FileIO.convert(self.current_file_path, path, ext)
                     QMessageBox.information(self, i18n.get('success'), i18n.get('conversion_complete'))
             except Exception as e:
                 QMessageBox.critical(self, i18n.get('error'), str(e))
 
-    def refresh_view(self):
-        # QSvgWidget reads from file or bytes.
-        svg_bytes = self.svg_manager.get_string().encode('utf-8')
-        self.svg_widget.load(QByteArray(svg_bytes))
-        
-        # Adjust size to fit available area or content size
-        # Note: If we use setWidgetResizable(True) on scrollarea, it tries to fit the widget to the viewport.
-        # But for large SVGs we want the widget to be its natural size so we can scroll.
-        # So we should probably setWidgetResizable(False) if we want scrolling for large images.
-        
-        sz = self.svg_widget.renderer().defaultSize()
-        if sz.isValid():
-             # If the SVG is larger than the viewport, we want to set the widget size to the SVG size
-             # so scrollbars appear.
-             self.svg_widget.setFixedSize(sz)
-             self.scroll_area.setWidgetResizable(False) # Allow distinct size
-        else:
-             self.scroll_area.setWidgetResizable(True) # Fit to window if no size info
-
     def populate_element_list(self):
         self.element_list.clear()
         if not self.svg_manager.root:
             return
-        
-        # Naive traversal for items with IDs.
-        # In a real app, we'd walk the tree.
         for elem in self.svg_manager.root.xpath("//*[@id]"):
             self.element_list.addItem(elem.attrib['id'])
 
     def on_element_selected(self):
-        # Highlight logic could go here (e.g. adding a stroke)
         pass
 
     def get_selected_id(self):
@@ -248,10 +324,8 @@ class MainWindow(QMainWindow):
         if color.isValid():
             new_color = color.name()
             if self.svg_manager.change_color(eid, new_color):
-                self.refresh_view()
+                self.load_svg_to_scene(self.svg_manager.get_string())
                 self.statusBar().showMessage(i18n.get('color_changed'))
-            else:
-                 QMessageBox.warning(self, i18n.get('error'), "Failed to change color.")
 
     def group_items(self):
         items = self.element_list.selectedItems()
@@ -263,7 +337,7 @@ class MainWindow(QMainWindow):
         
         group_id = f"group_{uuid.uuid4().hex[:8]}"
         if self.svg_manager.group_elements(ids, group_id):
-            self.refresh_view()
+            self.load_svg_to_scene(self.svg_manager.get_string())
             self.populate_element_list()
             self.statusBar().showMessage(i18n.get('grouped'))
 
@@ -273,7 +347,6 @@ class MainWindow(QMainWindow):
              QMessageBox.warning(self, i18n.get('warning'), i18n.get('no_selection'))
              return
         
-        # Get element string
         element = self.svg_manager.root.xpath(f"//*[@id='{eid}']")[0]
         xml_str = etree.tostring(element).decode('utf-8')
         
@@ -285,11 +358,37 @@ class MainWindow(QMainWindow):
              except Exception as e:
                  QMessageBox.critical(self, i18n.get('error'), str(e))
 
+    # --- Image Trace Features ---
+    def select_image_to_trace(self):
+        path, _ = QFileDialog.getOpenFileName(self, i18n.get('select_image'), "", "Images (*.png *.jpg *.jpeg *.bmp)")
+        if path:
+            self.trace_img_path = path
+            self.btn_trace.setEnabled(True)
+            self.statusBar().showMessage(f"Selected: {path}")
+
+    def perform_trace(self):
+        if not self.trace_img_path:
+            return
+        
+        preset = self.combo_preset.currentText()
+        try:
+            svg_content = ImageTracer.trace_image(self.trace_img_path, preset)
+            
+            # Load into manager
+            self.svg_manager.load_content(svg_content)
+            self.load_svg_to_scene(svg_content)
+            self.populate_element_list()
+            
+            # Ask to save?
+            self.current_file_path = None # New file
+            self.statusBar().showMessage("Trace complete.")
+        except Exception as e:
+             QMessageBox.critical(self, i18n.get('error'), str(e))
+
     def show_about(self):
         QMessageBox.about(self, i18n.get('about'), i18n.get('about_text'))
 
     def closeEvent(self, event):
-        # Could ask for confirmation
         event.accept()
 
 if __name__ == "__main__":

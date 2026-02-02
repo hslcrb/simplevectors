@@ -3,3 +3,5 @@ lxml
 svglib
 reportlab
 Pillow
+opencv-python-headless
+numpy
