@@ -1,16 +1,37 @@
 #!/bin/bash
+
+# 프로젝트 디렉토리 설정
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$PROJECT_DIR/venv"
+REQUIREMENTS="$PROJECT_DIR/requirements.txt"
 
+# 가상환경 확인 및 자동 생성
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Virtual environment not found. Please run installation first."
-    exit 1
+    echo "⚡ 가상환경이 없습니다. 새로 생성합니다... (Virtual environment not found. Creating...)"
+    python3 -m venv "$VENV_DIR"
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ 가상환경 생성 실패 (Failed to create venv)."
+        exit 1
+    fi
+    
+    echo "📦 생성 완료. 의존성 패키지를 설치합니다... (Installing dependencies...)"
+    source "$VENV_DIR/bin/activate"
+    
+    if [ -f "$REQUIREMENTS" ]; then
+        pip install --upgrade pip
+        pip install -r "$REQUIREMENTS"
+    else
+        echo "⚠️ requirements.txt 파일이 없습니다. (requirements.txt missing)"
+    fi
+else
+    echo "✅ 가상환경이 확인되었습니다. (Virtual environment found.)"
+    source "$VENV_DIR/bin/activate"
 fi
 
-source "$VENV_DIR/bin/activate"
-
-# Add src to PYTHONPATH so imports work correctly
+# PYTHONPATH 설정 (src 디렉토리 인식)
 export PYTHONPATH="$PROJECT_DIR/src:$PYTHONPATH"
 
-# Run the application
+# 실행
+echo "🚀 SimpleVectors 실행 중... (Launching SimpleVectors...)"
 python3 "$PROJECT_DIR/src/main.py"
