@@ -296,17 +296,16 @@ class MainWindow(QMainWindow):
                          # Get bounds in local coordinates
                          bounds = self.renderer.boundsOnElement(eid)
                          
-                         # Get matrix (transforms from parents)
-                         matrix = self.renderer.matrixForElement(eid)
-                         
-                         # Create an invisible interactive item matching the bounds & transform
+                         # Create an invisible interactive item matching the bounds
                          hitbox = QGraphicsRectItem(bounds)
                          
-                         # Apply transform
-                         hitbox.setTransform(QTransform(matrix))
+                         # Note: matrixForElement is missing in some PySide6 bindings, 
+                         # so we skip explicit transform application to avoid crashes.
+                         # This might cause misalignment for transformed elements, 
+                         # but ensures stability.
                          
                          # Branding & Flags
-                         hitbox.setBrush(QColor(0, 0, 0, 1)) # Almost transparent but hit-testable. 0 alpha sometimes ignored? 1 is safe.
+                         hitbox.setBrush(QColor(0, 0, 0, 1)) # Almost transparent but hit-testable.
                          hitbox.setPen(Qt.NoPen)             # No border by default
                          hitbox.setFlags(QGraphicsItem.ItemIsSelectable)
                          hitbox.setData(0, "interactive")
@@ -420,10 +419,9 @@ class MainWindow(QMainWindow):
             # Find bounds & transform for highlight
             if self.renderer.elementExists(eid):
                 rect = self.renderer.boundsOnElement(eid)
-                matrix = self.renderer.matrixForElement(eid)
+                # matrixForElement removed due to binding issues
                 
                 highlight = QGraphicsRectItem(rect)
-                highlight.setTransform(QTransform(matrix))
                 highlight.setData(0, "highlight") 
                 
                 pen = QPen(QColor("#00FFbf"), 2, Qt.DashLine)
