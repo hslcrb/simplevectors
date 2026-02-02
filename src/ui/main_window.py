@@ -15,36 +15,68 @@ from ..core.svg_manager import SvgManager
 from ..core.image_tracer import ImageTracer
 import uuid
 
+class InteractiveSvgItem(QGraphicsSvgItem):
+    def __init__(self, renderer, element_id):
+        super().__init__()
+        self.setSharedRenderer(renderer)
+        self.setElementId(element_id)
+        self.setFlags(QGraphicsItem.ItemIsSelectable | QGraphicsItem.ItemIsFocusable)
+
+    def paint(self, painter, option, widget=None):
+        # We need to remove the State_Selected flag before calling super().paint
+        # so that the built-in selection (dotted line) is not drawn if we want custom one.
+        # But QGraphicsSvgItem doesn't have built-in selection style usually.
+        super().paint(painter, option, widget)
+        
+        if self.isSelected():
+            painter.save()
+            # Mint color borders
+            mint_color = QColor("#00FFbf") 
+            pen = QPen(mint_color, 2, Qt.DashLine)
+            pen.setCosmetic(True) # Width stays same on zoom
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRect(self.boundingRect())
+            painter.restore()
+
 class GraphicsView(QGraphicsView):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setRenderHint(QPainter.Antialiasing)
         self.setRenderHint(QPainter.SmoothPixmapTransform)
-        self.setDragMode(QGraphicsView.ScrollHandDrag)
+        self.setDragMode(QGraphicsView.RubberBandDrag) # Enable Area Selection
         self.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.AnchorUnderMouse)
         self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
-        
-        # Optimize
         self.setOptimizationFlags(QGraphicsView.DontAdjustForAntialiasing | QGraphicsView.IndirectPainting)
 
     def wheelEvent(self, event: QWheelEvent):
-        # Zoom with Ctrl + Wheel or just Wheel if preferred.
-        # User asked for Ctrl ++ --, but usually wheel is for zoom too.
-        # Let's implement robust zoom.
         if event.modifiers() & Qt.ControlModifier:
             zoomInFactor = 1.25
             zoomOutFactor = 1 / zoomInFactor
-
             if event.angleDelta().y() > 0:
                 zoomFactor = zoomInFactor
             else:
                 zoomFactor = zoomOutFactor
-            
             self.scale(zoomFactor, zoomFactor)
         else:
-            # Default scroll behavior
             super().wheelEvent(event)
+            
+    def mousePressEvent(self, event):
+        # Allow panning with Middle Mouse or Alt+Click if RubberBand is default
+        if event.button() == Qt.MiddleButton:
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            original_event = event
+            super().mousePressEvent(event)
+            # We might need to fake a release to switch mode back properly later? 
+            # Or just set it and reset on release.
+        else:
+            self.setDragMode(QGraphicsView.RubberBandDrag)
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        self.setDragMode(QGraphicsView.RubberBandDrag) 
 
     def keyPressEvent(self, event):
         # WASD and Arrow Keys for panning
@@ -236,13 +268,44 @@ class MainWindow(QMainWindow):
     def load_svg_to_scene(self, svg_content):
         self.scene.clear()
         
-        # Keep reference to renderer to prevent garbage collection causing segfaults
+        # Keep reference to renderer
         self.renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
         
-        svg_item = QGraphicsSvgItem()
-        svg_item.setSharedRenderer(self.renderer)
-        self.scene.addItem(svg_item)
-        self.scene.setSceneRect(svg_item.boundingRect())
+        if self.svg_manager.root is None:
+            return
+
+        # Instead of adding one giant item, add items for each renderable element
+        # This enables individual selection.
+        # Note: This is a simplification. Complex SVGs with huge nested groups might have issues,
+        # but it works well for "SimpleVectors" level editing.
+        
+        # We iterate through IDs we ensured exist.
+        # We probably want to reverse order or rely on Z-value?
+        # In SVG, later elements are on top.
+        # lxml iter is document order.
+        
+        has_items = False
+        for elem in self.svg_manager.root.iter():
+            tag = etree.QName(elem).localname
+            if tag in ['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'image']:
+                if 'id' in elem.attrib:
+                    eid = elem.attrib['id']
+                    # Check if renderer can render this specific element
+                    if self.renderer.elementExists(eid):
+                         item = InteractiveSvgItem(self.renderer, eid)
+                         self.scene.addItem(item)
+                         has_items = True
+
+        # Fallback: if no individual items found (or renderer supports none), load whole.
+        if not has_items:
+             svg_item = QGraphicsSvgItem()
+             svg_item.setSharedRenderer(self.renderer)
+             self.scene.addItem(svg_item)
+             self.scene.setSceneRect(svg_item.boundingRect())
+        else:
+             # Calculate scene rect from all items
+             self.scene.update(self.scene.itemsBoundingRect())
+             self.scene.setSceneRect(self.scene.itemsBoundingRect())
 
     def open_file(self):
         path, _ = QFileDialog.getOpenFileName(self, i18n.get('open'), "", "Vector Files (*.svg *.eps);;All Files (*)")
