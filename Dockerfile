@@ -11,13 +11,14 @@ ENV PYTHONUNBUFFERED=1
 # libdbus-1-3: DBus support (often needed by Qt)
 # libxcb-*: X11 backend support
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     libxkbcommon-x11-0 \
     libdbus-1-3 \
     libxcb-xinerama0 \
     libxcb-cursor0 \
     libxcb-shape0 \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Create working directory
