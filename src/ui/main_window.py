@@ -311,7 +311,8 @@ class MainWindow(QMainWindow):
         # Iterate over all elements to create hitboxes
         for elem in self.svg_manager.root.iter():
             tag = etree.QName(elem).localname
-            if tag in ['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'image']:
+            # Added 'g' to allow group selection/interaction
+            if tag in ['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'image', 'g']:
                 if 'id' in elem.attrib:
                     eid = elem.attrib['id']
                     if self.renderer.elementExists(eid):
@@ -541,6 +542,20 @@ class MainWindow(QMainWindow):
         items = self.element_list.selectedItems()
         return [item.text() for item in items]
 
+    def select_item_by_id(self, eid):
+        """Selects an item in the list by ID."""
+        self.element_list.blockSignals(True)
+        self.element_list.clearSelection()
+        
+        items = self.element_list.findItems(eid, Qt.MatchExactly)
+        if items:
+            items[0].setSelected(True)
+            self.element_list.scrollToItem(items[0])
+            
+        self.element_list.blockSignals(False)
+        # Trigger the logic manually since we blocked signals
+        self.on_element_selected()
+
     def group_items(self):
         eids = self.get_selected_ids()
         if len(eids) < 2:
@@ -550,6 +565,7 @@ class MainWindow(QMainWindow):
         group_id = f"group_{uuid.uuid4().hex[:8]}"
         if self.svg_manager.group_elements(eids, group_id):
             self.refresh_scene_and_list()
+            self.select_item_by_id(group_id)
         else:
             QMessageBox.warning(self, i18n.get('error'), "Failed to group items.")
 
