@@ -34,6 +34,9 @@ TRANSLATIONS = {
         "trace": "추적",
         "preset": "사전 설정",
         "select_image": "이미지 선택",
+        "delete": "Delete",
+        "undo": "Undo",
+        "redo": "Redo",
     },
     "ko": {
         "app_title": "SimpleVectors",
@@ -68,6 +71,9 @@ TRANSLATIONS = {
         "trace": "추적",
         "preset": "사전 설정",
         "select_image": "이미지 선택",
+        "delete": "삭제",
+        "undo": "실행 취소",
+        "redo": "다시 실행",
     }
 }
 

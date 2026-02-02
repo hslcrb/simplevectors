@@ -4,7 +4,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QToolBar, QFileDialog,
                                QMessageBox, QListWidget, QDockWidget, QVBoxLayout, 
                                QWidget, QPushButton, QColorDialog, QLabel, QSplitter,
                                QGraphicsView, QGraphicsScene, QGraphicsRectItem,
-                               QComboBox, QHBoxLayout, QGroupBox, QGraphicsItem)
+                               QComboBox, QHBoxLayout, QGroupBox, QGraphicsItem, QMenu)
 from PySide6.QtSvgWidgets import QGraphicsSvgItem
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPalette, QWheelEvent, QColor, QPen, QTransform
@@ -126,6 +126,8 @@ class MainWindow(QMainWindow):
 
         # Graphics View (The Canvas)
         self.view = GraphicsView()
+        self.view.setContextMenuPolicy(Qt.CustomContextMenu) # Enable custom context menu
+        self.view.customContextMenuRequested.connect(self.on_context_menu)
         self.scene.selectionChanged.connect(self.on_scene_selection_changed) 
         self.view.setScene(self.scene)
         self.splitter.addWidget(self.view)
@@ -194,6 +196,21 @@ class MainWindow(QMainWindow):
         
         self.act_group = QAction(i18n.get('group'), self)
         self.act_group.triggered.connect(self.group_items)
+
+        self.act_ungroup = QAction(i18n.get('ungroup'), self)
+        self.act_ungroup.triggered.connect(self.ungroup_items)
+        
+        self.act_delete = QAction(i18n.get('delete'), self)
+        self.act_delete.triggered.connect(self.delete_item)
+        self.act_delete.setShortcut(QKeySequence.Delete)
+
+        self.act_undo = QAction(i18n.get('undo'), self)
+        self.act_undo.triggered.connect(self.undo)
+        self.act_undo.setShortcut(QKeySequence.Undo)
+
+        self.act_redo = QAction(i18n.get('redo'), self)
+        self.act_redo.triggered.connect(self.redo)
+        self.act_redo.setShortcut(QKeySequence.Redo)
 
         # Zoom Actions
         self.act_zoom_in = QAction("Zoom In", self)
@@ -504,11 +521,71 @@ class MainWindow(QMainWindow):
         except Exception as e:
              QMessageBox.critical(self, i18n.get('error'), str(e))
 
+    def undo(self):
+        if self.svg_manager.undo():
+            self.refresh_scene_and_list()
+        else:
+            print("Nothing to undo")
+
+    def redo(self):
+        if self.svg_manager.redo():
+             self.refresh_scene_and_list()
+        else:
+             print("Nothing to redo")
+
+    def delete_item(self):
+        eid = self.get_selected_id()
+        if not eid:
+            return
+        
+        reply = QMessageBox.question(self, i18n.get('delete'), f"{i18n.get('delete')} {eid}?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            if self.svg_manager.delete_element(eid):
+                self.refresh_scene_and_list()
+
+    def ungroup_items(self):
+        eid = self.get_selected_id()
+        if not eid:
+            return
+            
+        if self.svg_manager.ungroup_elements([eid]):
+            self.refresh_scene_and_list()
+        else:
+             # Maybe it's not a group or failed
+             pass
+
+    def refresh_scene_and_list(self):
+         content = self.svg_manager.get_string()
+         self.load_svg_to_scene(content)
+         self.populate_element_list()
+
     def show_about(self):
         QMessageBox.about(self, i18n.get('about'), i18n.get('about_text'))
 
-    def closeEvent(self, event):
-        event.accept()
+    def on_context_menu(self, pos):
+        item = self.view.itemAt(pos)
+        
+        menu = QMenu(self)
+        menu.addAction(self.act_undo)
+        menu.addAction(self.act_redo)
+        menu.addSeparator()
+        
+        if item: # If something under mouse (even interactive overlay)
+            # Check selection from list
+            selected_id = self.get_selected_id()
+             
+            if selected_id:
+                menu.addAction(self.act_color)
+                menu.addSeparator()
+                menu.addAction(self.act_group)
+                menu.addAction(self.act_ungroup)
+                menu.addSeparator()
+                menu.addAction(self.act_delete)
+                menu.addAction(self.act_export_selected)
+        
+        menu.exec(self.view.mapToGlobal(pos))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
