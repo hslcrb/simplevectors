@@ -140,8 +140,7 @@ class MainWindow(QMainWindow):
         self.sidebar = QWidget()
         self.sidebar_layout = QVBoxLayout(self.sidebar)
         
-        # Element List
-        self.element_list = QListWidget()
+        self.element_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.element_list.itemSelectionChanged.connect(self.on_element_selected)
         self.sidebar_layout.addWidget(QLabel(i18n.get('view'))) # Placeholder title
         self.sidebar_layout.addWidget(self.element_list)
@@ -424,23 +423,18 @@ class MainWindow(QMainWindow):
 
     def on_element_selected(self):
         """Handle element selection in the list widget."""
-        self.get_selected_id()
-
-    def get_selected_id(self):
-        items = self.element_list.selectedItems()
-        
-        # Clear previous highlight visuals first
+        # Highlight selection
+        # Remove previous highlights
         for item in self.scene.items():
             if item.data(0) == "highlight":
                self.scene.removeItem(item)
 
-        if items:
-            eid = items[0].text()
-            
-            # Find bounds & transform for highlight
+        items = self.element_list.selectedItems()
+        for item in items:
+            eid = item.text()
             if self.renderer.elementExists(eid):
                 rect = self.renderer.boundsOnElement(eid)
-                # matrixForElement removed due to binding issues
+                # No matrix, just overlay
                 
                 highlight = QGraphicsRectItem(rect)
                 highlight.setData(0, "highlight") 
@@ -450,10 +444,13 @@ class MainWindow(QMainWindow):
                 highlight.setPen(pen)
                 highlight.setBrush(Qt.NoBrush)
                 self.scene.addItem(highlight)
-                
-            return eid
-        return None
 
+    def get_selected_id(self):
+        # Backward compatibility helper for single item actions like color change
+        items = self.get_selected_ids()
+        if items:
+            return items[0]
+        return None
     def change_item_color(self):
         eid = self.get_selected_id()
         if not eid:
@@ -537,28 +534,43 @@ class MainWindow(QMainWindow):
         else:
              print("Nothing to redo")
 
+    def get_selected_ids(self):
+        """Returns a list of all selected item IDs."""
+        items = self.element_list.selectedItems()
+        return [item.text() for item in items]
+
+    def group_items(self):
+        eids = self.get_selected_ids()
+        if len(eids) < 2:
+            QMessageBox.warning(self, i18n.get('warning'), "Select at least 2 items to group.")
+            return
+
+        group_id = f"group_{uuid.uuid4().hex[:8]}"
+        if self.svg_manager.group_elements(eids, group_id):
+            self.refresh_scene_and_list()
+        else:
+            QMessageBox.warning(self, i18n.get('error'), "Failed to group items.")
+
+    def ungroup_items(self):
+        eids = self.get_selected_ids()
+        if not eids:
+            return
+            
+        if self.svg_manager.ungroup_elements(eids):
+            self.refresh_scene_and_list()
+
     def delete_item(self):
-        eid = self.get_selected_id()
-        if not eid:
+        # Supports multi-delete now
+        eids = self.get_selected_ids()
+        if not eids:
             return
         
-        reply = QMessageBox.question(self, i18n.get('delete'), f"{i18n.get('delete')} {eid}?",
+        reply = QMessageBox.question(self, i18n.get('delete'), f"{i18n.get('delete')} {len(eids)} items?",
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         
         if reply == QMessageBox.Yes:
-            if self.svg_manager.delete_element(eid):
+            if self.svg_manager.delete_elements(eids):
                 self.refresh_scene_and_list()
-
-    def ungroup_items(self):
-        eid = self.get_selected_id()
-        if not eid:
-            return
-            
-        if self.svg_manager.ungroup_elements([eid]):
-            self.refresh_scene_and_list()
-        else:
-             # Maybe it's not a group or failed
-             pass
 
     def refresh_scene_and_list(self):
          content = self.svg_manager.get_string()

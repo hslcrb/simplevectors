@@ -175,16 +175,21 @@ class SvgManager:
         
         return changed
 
-    def delete_element(self, element_id):
-        """Deletes an element by ID."""
-        if self.root is None:
-            return False
-            
-        elements = self.root.xpath(f"//*[@id='{element_id}']")
-        if not elements:
+    def delete_elements(self, element_ids):
+        """Deletes multiple elements by ID."""
+        if self.root is None or not element_ids:
             return False
             
         self._save_state()
-        el = elements[0]
-        el.getparent().remove(el)
-        return True
+        changed = False
+        
+        for eid in element_ids:
+            elements = self.root.xpath(f"//*[@id='{eid}']")
+            if elements:
+                el = elements[0]
+                parent = el.getparent()
+                if parent is not None:
+                    parent.remove(el)
+                    changed = True
+        
+        return changed
