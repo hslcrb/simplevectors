@@ -4,10 +4,10 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QToolBar, QFileDialog,
                                QMessageBox, QListWidget, QDockWidget, QVBoxLayout, 
                                QWidget, QPushButton, QColorDialog, QLabel, QSplitter,
                                QGraphicsView, QGraphicsScene, QGraphicsRectItem,
-                               QComboBox, QHBoxLayout, QGroupBox)
+                               QComboBox, QHBoxLayout, QGroupBox, QGraphicsItem)
 from PySide6.QtSvgWidgets import QGraphicsSvgItem
 from PySide6.QtSvg import QSvgRenderer
-from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPalette, QWheelEvent
+from PySide6.QtGui import QAction, QIcon, QKeySequence, QPainter, QPalette, QWheelEvent, QColor, QPen
 from PySide6.QtCore import Qt, QByteArray, QSize
 from ..assets.i18n import i18n
 from ..core.file_io import FileIO
@@ -269,44 +269,20 @@ class MainWindow(QMainWindow):
     def load_svg_to_scene(self, svg_content):
         self.scene.clear()
         
-        # Keep reference to renderer
+        # Keep reference to renderer to prevent garbage collection causing segfaults
         self.renderer = QSvgRenderer(QByteArray(svg_content.encode('utf-8')))
         
-        if self.svg_manager.root is None:
-            return
-
-        # Instead of adding one giant item, add items for each renderable element
-        # This enables individual selection.
-        # Note: This is a simplification. Complex SVGs with huge nested groups might have issues,
-        # but it works well for "SimpleVectors" level editing.
+        # Render the ENTIRE SVG as a single item to ensure correct composition and transforms.
+        # Splitting into individual items caused broken layouts because explicit transforms usually 
+        # rely on parent group context which is lost when rendered individually.
+        svg_item = QGraphicsSvgItem()
+        svg_item.setSharedRenderer(self.renderer)
+        self.scene.addItem(svg_item)
+        self.scene.setSceneRect(svg_item.boundingRect())
         
-        # We iterate through IDs we ensured exist.
-        # We probably want to reverse order or rely on Z-value?
-        # In SVG, later elements are on top.
-        # lxml iter is document order.
-        
-        has_items = False
-        for elem in self.svg_manager.root.iter():
-            tag = etree.QName(elem).localname
-            if tag in ['path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'text', 'image']:
-                if 'id' in elem.attrib:
-                    eid = elem.attrib['id']
-                    # Check if renderer can render this specific element
-                    if self.renderer.elementExists(eid):
-                         item = InteractiveSvgItem(self.renderer, eid)
-                         self.scene.addItem(item)
-                         has_items = True
-
-        # Fallback: if no individual items found (or renderer supports none), load whole.
-        if not has_items:
-             svg_item = QGraphicsSvgItem()
-             svg_item.setSharedRenderer(self.renderer)
-             self.scene.addItem(svg_item)
-             self.scene.setSceneRect(svg_item.boundingRect())
-        else:
-             # Calculate scene rect from all items
-             self.scene.update(self.scene.itemsBoundingRect())
-             self.scene.setSceneRect(self.scene.itemsBoundingRect())
+        # We prefer to work with one main item for display accuracy.
+        # For selection highlight, we will add an overlay item later.
+        self.main_svg_item = svg_item
 
     def open_file(self):
         path, _ = QFileDialog.getOpenFileName(self, i18n.get('open'), "", "Vector Files (*.svg *.eps);;All Files (*)")
@@ -374,7 +350,32 @@ class MainWindow(QMainWindow):
     def get_selected_id(self):
         items = self.element_list.selectedItems()
         if items:
-            return items[0].text()
+            eid = items[0].text()
+            # Highlight selection
+            # Remove previous highlights
+            for item in self.scene.items():
+                if isinstance(item, QGraphicsRectItem) and item.data(0) == "highlight":
+                    self.scene.removeItem(item)
+            
+            # Find bounds
+            if self.renderer.elementExists(eid):
+                # Getting bounds is tricky in PySide6 QtSvg as boundsOnElement might be local.
+                # However, usually for simple transforms it works.
+                # Let's clean transform matrix issues by getting global bounds if possible? 
+                # QSvgRenderer.boundsOnElement returns QRectF.
+                rect = self.renderer.boundsOnElement(eid)
+                
+                # Check matrix. Since we render the whole item at 0,0, these bounds should be correct relative to scene.
+                # Create highlight rect
+                highlight = QGraphicsRectItem(rect)
+                highlight.setData(0, "highlight") # Tag data
+                pen = QPen(QColor("#00FFbf"), 2, Qt.DashLine)
+                pen.setCosmetic(True)
+                highlight.setPen(pen)
+                highlight.setBrush(Qt.NoBrush)
+                self.scene.addItem(highlight)
+                
+            return eid
         return None
 
     def change_item_color(self):
