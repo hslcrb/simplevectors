@@ -41,7 +41,10 @@ simplevectors/
   ```bash
   docker pull ghcr.io/hslcrb/simplevectors:latest
   ```
-- **Automated Versioning**: We follow a commit-triggered versioning policy (`v0.0.x`), incrementing every 10 commits to ensure consistent milestones.
+- **Automated Versioning**: Versions follow `v0.0.x` format, incrementing every 10 commits.
+
+## 📚 Documentation
+For detailed guides and tutorials, visit our **[Project Wiki](https://github.com/hslcrb/simplevectors/wiki)**.
 
 ## 🏁 Getting Started
 ### Local Execution
@@ -100,6 +103,9 @@ simplevectors/
   docker pull ghcr.io/hslcrb/simplevectors:latest
   ```
 - **자동 버전 관리**: 커밋 10번마다 버전이 자동으로 갱신되는 정책(`v0.0.x`)을 따릅니다.
+
+## 📚 문서 (Documentation)
+상세 가이드 및 튜토리얼은 **[프로젝트 위키](https://github.com/hslcrb/simplevectors/wiki)**에서 확인하실 수 있습니다.
 
 ## 🏁 시작하기
 ### 로컬 실행
