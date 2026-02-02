@@ -14,6 +14,7 @@ from ..core.file_io import FileIO
 from ..core.svg_manager import SvgManager
 from ..core.image_tracer import ImageTracer
 import uuid
+from lxml import etree
 
 class InteractiveSvgItem(QGraphicsSvgItem):
     def __init__(self, renderer, element_id):
