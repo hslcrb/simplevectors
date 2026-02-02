@@ -140,6 +140,8 @@ class MainWindow(QMainWindow):
         self.sidebar = QWidget()
         self.sidebar_layout = QVBoxLayout(self.sidebar)
         
+        # Element List
+        self.element_list = QListWidget()
         self.element_list.setSelectionMode(QListWidget.ExtendedSelection)
         self.element_list.itemSelectionChanged.connect(self.on_element_selected)
         self.sidebar_layout.addWidget(QLabel(i18n.get('view'))) # Placeholder title
